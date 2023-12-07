@@ -1,0 +1,302 @@
+#![feature(iterator_try_collect)]
+
+use std::io::{stdin, Read};
+
+use im_rc::Vector;
+
+type Cup = u32;
+
+type Input = Vec<Cup>;
+
+fn find_new_dest(cups: &[Cup], current_value: Cup) -> usize {
+    let mut target = current_value;
+    loop {
+        target = if target == 1 {
+            cups.len() as u32
+        } else {
+            target - 1
+        };
+
+        if target == current_value {
+            break;
+        }
+
+        if let Some((index, _cup)) = cups.iter().enumerate().find(|(_index, &cup)| cup == target) {
+            return index;
+        }
+    }
+
+    panic!("No cup found");
+}
+
+fn cycle(cups: &mut [Cup], current_index: usize) {
+    let mut removed_cups = [0; 3];
+
+    for i in 0..3 {
+        let looped_index = (current_index + 1 + i) % cups.len();
+        removed_cups[i] = cups[looped_index];
+        cups[looped_index] = 0;
+    }
+
+    let current_value = cups[current_index];
+    let max_value = cups.len() as Cup;
+    let mut targets = std::iter::successors(Some(current_value), |&v| {
+        Some(if v == 1 { max_value } else { v - 1 })
+    });
+    targets.next(); // Skip current value
+
+    // First one that wasn't removed is the one to search for.
+    let dest_value = targets.find(|t| !removed_cups.contains(t)).unwrap();
+
+    let dest_index = cups.iter().enumerate().find(|(_index, &value)| value == dest_value).map(|(index, _value)| index).expect("Destination cup not found");
+    let dest_index = if dest_index < current_index {
+        dest_index + cups.len()
+    } else {
+        dest_index
+    };
+
+    // CUR R1 R2 R3 ... DEST ...
+    // CUR ... DEST R1 R2 R3 ...
+    for index in current_index + 1..=dest_index - 3 {
+        cups[index % cups.len()] = cups[(index + 3) % cups.len()];
+    }
+
+    let new_dest_index = dest_index - 3;
+
+    for index in 0..3 {
+        let looped_index = (new_dest_index + 1 + index) % cups.len();
+        cups[looped_index] = removed_cups[index];
+    }
+}
+
+fn run_game(cups: &mut [Cup], n: usize) {
+    let indices = (0..cups.len()).cycle().take(n);
+    for index in indices {
+        cycle(cups, index);
+    }
+}
+
+fn iter_from_1<'a>(cups: &'a [Cup]) -> impl Iterator<Item = Cup> + 'a {
+    let index_of_1 = cups
+        .iter()
+        .enumerate()
+        .find(|(_index, &value)| value == 1)
+        .map(|(index, _value)| index)
+        .expect("No cup with value 1");
+    let indices = (1..cups.len()).map(move |offset| (index_of_1 + offset) % cups.len());
+    indices.map(|i| cups[i])
+}
+
+fn part1(input: &[Cup]) {
+    let mut cups: Box<[Cup]> = extend_cups(input, 9);
+    run_game(&mut cups, 100);
+    let labels_after_1: String = iter_from_1(&cups)
+        .map(|cup| char::from_digit(cup as u32, 10))
+        .try_collect()
+        .expect("Digit out of range");
+    println!("Part1: {}", labels_after_1);
+}
+
+fn extend_cups<V>(input: &[Cup], max_value: Cup) -> V
+where
+V: FromIterator<Cup>,
+{
+    input
+        .iter()
+        .copied()
+        .chain((input.len() + 1) as u32..=max_value)
+        .collect()
+}
+
+fn cycle_part2(cups: &mut Vector<Cup>, mut current_index: usize) -> usize {
+    let current_value = cups[current_index];
+    let max_value = cups.len() as u32;
+
+    let removed_cups = if current_index + 3 < cups.len() {
+        cups.slice(current_index + 1..=current_index + 3)
+    } else {
+        let count_at_front = current_index + 4 - cups.len();
+        let removed = cups.slice(current_index + 1..cups.len()) + cups.slice(0..count_at_front);
+        current_index -= count_at_front;
+        removed
+    };
+    debug_assert_eq!(removed_cups.len(), 3);
+
+    let mut targets = std::iter::successors(Some(current_value), |&v| {
+        Some(if v == 1 { max_value } else { v - 1 })
+    });
+    targets.next(); // Skip current value
+
+    // First one that wasn't removed is the one to search for.
+    let dest_value = targets.find(|t| !removed_cups.contains(t)).unwrap();
+
+    let dest_index = cups.index_of(&dest_value).expect("Element missing");
+
+    if dest_index < current_index {
+        current_index += 3;
+    }
+
+    let after = cups.split_off(dest_index + 1);
+    cups.append(removed_cups);
+    cups.append(after);
+
+    (current_index + 1) % cups.len()
+}
+
+fn run_game_part2(cups: &mut Vector<Cup>, n: usize) {
+    let mut index = 0;
+    for _ in 1..=n {
+        // println!("-- move {} --", m);
+        // println!("cups: {:?}", cups);
+        // println!("current: {}", index);
+        // println!();
+        index = cycle_part2(cups, index);
+    }
+}
+
+fn run_game_inspect(cups: &mut Vector<Cup>, count: usize) {
+    order_from_1(cups);
+    println!("original:");
+    println!("{:?}", cups.clone().slice(..40));
+    for it in 1..=count {
+        run_game_part2(cups, cups.len());
+        order_from_1(cups);
+        println!("at {}:", it);
+        println!("{:?}", cups.clone().slice(..40));
+    }
+}
+
+
+fn order_from_1(cups: &mut Vector<Cup>) {
+    let index_of_1 = cups
+        .iter()
+        .enumerate()
+        .find(|(_index, &value)| value == 1)
+        .map(|(index, _value)| index)
+        .expect("No cup with value 1");
+    let before_1 = cups.slice(0..index_of_1);
+    cups.append(before_1);
+}
+
+fn iter_from_1_part2<'a>(cups: &'a Vector<Cup>) -> impl Iterator<Item = Cup> + 'a {
+    let index_of_1 = cups
+        .iter()
+        .enumerate()
+        .find(|(_index, &value)| value == 1)
+        .map(|(index, _value)| index)
+        .expect("No cup with value 1");
+    let indices = (1..cups.len()).map(move |offset| (index_of_1 + offset) % cups.len());
+    indices.map(|i| cups[i])
+}
+
+const INPUT_SIZE: u32 = 100_000;
+
+fn part2a(input: &[Cup]) {
+    let mut cups = extend_cups(input, INPUT_SIZE);
+    run_game_part2(&mut cups, 10 * INPUT_SIZE as usize);
+    order_from_1(&mut cups);
+    let ans = cups[1] * cups[2];
+    println!("Part2a: {}", ans);
+}
+
+fn part2b(input: &[Cup]) {
+    let mut cups: Box<[Cup]> = extend_cups(input, INPUT_SIZE);
+    run_game(&mut cups, 10 * INPUT_SIZE as usize);
+    let labels_after_1: Vec<Cup> = iter_from_1(&cups).take(2).collect();
+    let ans = labels_after_1[0] * labels_after_1[1];
+    println!("Part2b: {}", ans);
+}
+
+fn main() {
+    let mut raw_input = String::new();
+    stdin()
+        .read_to_string(&mut raw_input)
+        .expect("Failed to read input");
+    let input = parse::full_input(&raw_input).expect("Failed to parse input");
+    //part1(&input);
+    //part2a(&input);
+    part2b(&input);
+}
+
+mod parse {
+    use super::*;
+
+    pub(crate) fn full_input(input: &str) -> Result<Input, String> {
+        let line = input.lines().next().ok_or("Input is empty".to_string())?;
+        line.chars()
+            .map(|c| c.to_digit(10))
+            .try_collect()
+            .ok_or("Input contains non-digits".to_string())
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn parses_line() {
+            assert_eq!(full_input("135246"), Ok(vec![1, 3, 5, 2, 4, 6]));
+        }
+
+        #[test]
+        fn parses_with_line_ending() {
+            assert_eq!(full_input("135246\n"), Ok(vec![1, 3, 5, 2, 4, 6]));
+        }
+
+        #[test]
+        fn parses_with_2_line_endings() {
+            assert_eq!(full_input("135246\n\n"), Ok(vec![1, 3, 5, 2, 4, 6]));
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use im_rc::vector;
+
+    use super::*;
+
+    #[test]
+    fn find_index_immediate() {
+        let cups = [3, 0, 0, 0, 2, 5, 4, 6, 7];
+        assert_eq!(find_new_dest(&cups, 3), 4);
+    }
+
+    #[test]
+    fn find_index_skip_1() {
+        let cups = [3, 0, 0, 0, 5, 1, 4, 6, 7];
+        assert_eq!(find_new_dest(&cups, 3), 5);
+    }
+
+    #[test]
+    fn find_index_loop_around() {
+        let cups = [3, 0, 0, 0, 4, 5, 8, 6, 7];
+        assert_eq!(find_new_dest(&cups, 3), 6);
+    }
+
+    #[test]
+    fn cycle_once() {
+        let mut cups = [3, 8, 9, 1, 2, 5, 4, 6, 7];
+        let starting_index = 0;
+        cycle(&mut cups, starting_index);
+        assert_eq!(cups, [3, 2, 8, 9, 1, 5, 4, 6, 7]);
+    }
+
+    #[test]
+    fn cycle_once_2() {
+        let mut cups = vector![3, 8, 9, 1, 2, 5, 4, 6, 7];
+        let starting_index = 0;
+        let next_index = cycle_part2(&mut cups, starting_index);
+        assert_eq!(next_index, 1);
+        assert_eq!(cups, vector![3, 2, 8, 9, 1, 5, 4, 6, 7]);
+    }
+
+    #[test]
+    fn cycle_once_wrap() {
+        let mut cups = vector![3, 2, 8, 9, 1, 5, 4, 6, 7];
+        let starting_index = 7;
+        let next_index = cycle_part2(&mut cups, starting_index);
+        assert_eq!(next_index, 0);
+        assert_eq!(cups, vector![8, 9, 1, 5, 7, 3, 2, 4, 6]);
+    }
+}
