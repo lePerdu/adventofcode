@@ -10,4 +10,5 @@
 (package
  (name advent_2023)
  (synopsis "Advent 2023 problems in OCaml")
- (depends ocaml dune))
+ (depends ocaml dune)
+ (allow_empty))
