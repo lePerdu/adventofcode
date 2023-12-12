@@ -33,8 +33,6 @@ let read_input file_path =
         let branches = read_branches ch in
         { directions; branches }))
 
-type map_graph = (node, branch) Hashtbl.t
-
 let create_graph input =
   input.branches |> List.to_seq
   |> Seq.map (fun b -> (b.from, b))

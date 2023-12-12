@@ -40,23 +40,6 @@ let card_of_char = function
       raise
       @@ Invalid_argument (Printf.sprintf "Invalid card character: %C" invalid)
 
-let char_of_card = function
-  | C2 -> '2'
-  | C3 -> '3'
-  | C4 -> '4'
-  | C5 -> '5'
-  | C6 -> '6'
-  | C7 -> '7'
-  | C8 -> '8'
-  | C9 -> '9'
-  | C10 -> 'T'
-  | Jack -> 'J'
-  | Queen -> 'Q'
-  | King -> 'K'
-  | Ace -> 'A'
-
-type counted_hand = (card * int) list
-
 let card_counts cards =
   cards |> List.fast_sort compare |> List.to_seq |> Seq.group ( == )
   |> Seq.map (fun group ->

@@ -1,6 +1,3 @@
-type value_hist = int array
-type oasis_scan = value_hist list
-
 let hist_deltas hist =
   let hist = Array.to_seq hist in
   Seq.zip (Seq.drop 1 hist) hist
