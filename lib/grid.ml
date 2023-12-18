@@ -14,11 +14,14 @@ module type G = sig
   type t
 
   val make : int -> int -> cell -> t
+  val copy : t -> t
   val rows : t -> int
   val cols : t -> int
   val get : t -> coord -> cell
   val set : t -> coord -> cell -> unit
   val to_seqi : t -> (coord * cell) Seq.t
+  val rows_seq : t -> int Seq.t
+  val cols_seq : t -> int Seq.t
   val input : in_channel -> t
   val print : t -> unit
 end
@@ -30,6 +33,7 @@ module Make (Cell : CellType) : G with type cell = Cell.t = struct
   let make row_count col_count fill =
     { data = Array.make_matrix row_count col_count fill }
 
+  let copy g = { data = Array.map Array.copy g.data }
   let rows g = Array.length g.data
   let cols g = Array.length g.data.(0)
   let get g { row; col } = g.data.(row).(col)
@@ -41,6 +45,9 @@ module Make (Cell : CellType) : G with type cell = Cell.t = struct
            Array.to_seqi row
            |> Seq.map (fun (col_index, cell) ->
                   ({ row = row_index; col = col_index }, cell)))
+
+  let rows_seq g = Seq.init (rows g) Fun.id
+  let cols_seq g = Seq.init (cols g) Fun.id
 
   let input ch =
     let convert_char c =
