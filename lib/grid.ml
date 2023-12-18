@@ -68,7 +68,7 @@ module Make (Cell : CellType) : G with type cell = Cell.t = struct
           loop [ first ] (Array.length first) |> List.rev |> Array.of_list
         in
         { data = rows }
-    | None -> failwith "Missing first row"
+    | None -> (* Only raise if the first line is missing *) raise End_of_file
 
   let print g =
     for row = 0 to rows g - 1 do
