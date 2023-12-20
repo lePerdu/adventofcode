@@ -1,5 +1,10 @@
 #!/bin/sh
 
+if [ $# != 1 ]; then
+    echo "usage: $0 N" >&2
+    exit 2
+fi
+
 cd $(dirname "$0")
 
 n=$1
