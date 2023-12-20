@@ -17,6 +17,7 @@ module type G = sig
   val copy : t -> t
   val rows : t -> int
   val cols : t -> int
+  val in_bounds : t -> coord -> bool
   val get : t -> coord -> cell
   val set : t -> coord -> cell -> unit
   val to_seqi : t -> (coord * cell) Seq.t
@@ -36,6 +37,10 @@ module Make (Cell : CellType) : G with type cell = Cell.t = struct
   let copy g = { data = Array.map Array.copy g.data }
   let rows g = Array.length g.data
   let cols g = Array.length g.data.(0)
+
+  let in_bounds g { row; col } =
+    0 <= row && row < rows g && 0 <= col && col < cols g
+
   let get g { row; col } = g.data.(row).(col)
   let set g { row; col } v = g.data.(row).(col) <- v
 
