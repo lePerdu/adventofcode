@@ -15,41 +15,43 @@ let read_input file_name =
 type state = { pos : Coord.t; straight_dir : Coord.dir; straight_count : int }
 type queue_node = { state : state; path_dist : int; est_remaining : int }
 
+let dummy_state =
+  {
+    state =
+      { pos = { row = 0; col = 0 }; straight_dir = Right; straight_count = 0 };
+    path_dist = 0;
+    est_remaining = 0;
+  }
+
 let total_est_cost s = s.path_dist + s.est_remaining
 
-module PriorityQ = Advent.Heap.Make (struct
+module PriorityQ = Binary_heap.Make (struct
   type t = queue_node
 
   let compare a b = Int.compare (total_est_cost a) (total_est_cost b)
 end)
 
-module VisitMap = Map.Make (struct
-  type t = state
-
-  let compare = compare
-end)
-
 let estimate_cost = Coord.dist
 
-let reconstruct_path visited end_state =
-  let rec loop state =
-    match VisitMap.find_opt state visited with
-    | Some parent -> state :: loop parent
-    | None -> []
-  in
-  List.rev (loop end_state)
+(* let reconstruct_path visited end_state = *)
+(*   let rec loop state = *)
+(*     match Hashtbl.find_opt visited state with *)
+(*     | Some parent -> state :: loop parent *)
+(*     | None -> [] *)
+(*   in *)
+(*   List.rev (loop end_state) *)
 
-let print_path path =
-  print_string "Path:";
-  let rec loop = function
-    | [] -> ()
-    | next :: rest ->
-        Printf.printf " [%a -> %s]" Coord.pp next.pos
-          (Coord.dir_name next.straight_dir);
-        loop rest
-  in
-  loop path;
-  print_newline ()
+(* let print_path path = *)
+(*   print_string "Path:"; *)
+(*   let rec loop = function *)
+(*     | [] -> () *)
+(*     | next :: rest -> *)
+(*         Printf.printf " [%a -> %s]" Coord.pp next.pos *)
+(*           (Coord.dir_name next.straight_dir); *)
+(*         loop rest *)
+(*   in *)
+(*   loop path; *)
+(*   print_newline () *)
 
 let find_min_path ~can_go_in_dir ~can_stop city start target =
   let possible_dirs city state =
@@ -74,26 +76,26 @@ let find_min_path ~can_go_in_dir ~can_stop city start target =
       est_remaining = estimate_cost new_pos target;
     }
   in
-  let rec loop visited queue =
-    match PriorityQ.pop_min queue with
-    | Some (current, rest) ->
-        if current.state.pos = target && can_stop current.state then
-          (current, visited)
-        else
-          let possible_steps =
-            possible_dirs city current.state
-            |> List.map (make_adj_node current)
-            |> List.filter (fun node -> not (VisitMap.mem node.state visited))
-          in
-          loop
-            (List.fold_left
-               (fun acc step -> VisitMap.add step.state current.state acc)
-               visited possible_steps)
-            (List.fold_left (Fun.flip PriorityQ.add) rest possible_steps)
-    | None -> raise Not_found
+  let est_size = (Grid.rows city + Grid.cols city) * 2 in
+  let visited = Hashtbl.create est_size in
+  let queue = PriorityQ.create ~dummy:dummy_state est_size in
+  let rec loop () =
+    if PriorityQ.is_empty queue then raise Not_found
+    else
+      let current = PriorityQ.pop_minimum queue in
+      if Coord.equal current.state.pos target && can_stop current.state then
+        current
+      else (
+        possible_dirs city current.state
+        |> List.map (make_adj_node current)
+        |> List.filter (fun node -> not (Hashtbl.mem visited node.state))
+        |> List.iter (fun step ->
+               Hashtbl.add visited step.state current.state;
+               PriorityQ.add queue step);
+        loop ())
   in
   (* Initial queue containing all of the possible starting directions *)
-  let init_queue =
+  let () =
     Coord.all_dirs |> List.to_seq
     |> Seq.filter (fun d -> Grid.in_bounds city (Coord.add_dir start d))
     |> Seq.map (fun d ->
@@ -102,11 +104,11 @@ let find_min_path ~can_go_in_dir ~can_stop city start target =
              path_dist = 0;
              est_remaining = estimate_cost start target;
            })
-    |> PriorityQ.of_seq
+    |> Seq.iter (PriorityQ.add queue)
   in
-  let end_node, visited = loop VisitMap.empty init_queue in
-  let path = reconstruct_path visited end_node.state in
-  print_path path;
+  let end_node = loop () in
+  (* let path = reconstruct_path visited end_node.state in *)
+  (* print_path path; *)
   end_node.path_dist
 
 let part1_max_straight_count = 3

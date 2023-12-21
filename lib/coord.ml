@@ -4,10 +4,19 @@ let dist c1 c2 = Int.abs (c1.row - c2.row) + Int.abs (c1.col - c2.col)
 let add c1 c2 = { row = c1.row + c2.row; col = c1.col + c2.col }
 let sub c1 c2 = { row = c1.row - c2.row; col = c1.col - c2.col }
 let scale c n = { row = c.row * n; col = c.col * n }
+let equal c1 c2 = c1.row == c2.row && c1.col == c2.col
+
+let hash { row; col } =
+  let r = Int.hash row in
+  let c = Int.hash col in
+  (r * 17) + c
+
 let pp ch { row; col } = Printf.fprintf ch "(%d, %d)" row col
 
 type dir = Up | Down | Left | Right
 
+let dir_equal = ( == )
+let dir_hash d = d |> Obj.repr |> Obj.tag |> Int.hash
 let all_dirs = [ Up; Down; Left; Right ]
 
 let adjacent_dirs { row; col } =
