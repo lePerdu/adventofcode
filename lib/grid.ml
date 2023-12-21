@@ -1,7 +1,3 @@
-type coord = { row : int; col : int }
-
-let coord_dist c1 c2 = Int.abs (c1.row - c2.row) + Int.abs (c1.col - c2.col)
-
 module type CellType = sig
   type t
 
@@ -17,10 +13,11 @@ module type G = sig
   val copy : t -> t
   val rows : t -> int
   val cols : t -> int
-  val in_bounds : t -> coord -> bool
-  val get : t -> coord -> cell
-  val set : t -> coord -> cell -> unit
-  val to_seqi : t -> (coord * cell) Seq.t
+  val in_bounds : t -> Coord.t -> bool
+  val max_coord : t -> Coord.t
+  val get : t -> Coord.t -> cell
+  val set : t -> Coord.t -> cell -> unit
+  val to_seqi : t -> (Coord.t * cell) Seq.t
   val rows_seq : t -> int Seq.t
   val cols_seq : t -> int Seq.t
   val input : in_channel -> t
@@ -38,18 +35,19 @@ module Make (Cell : CellType) : G with type cell = Cell.t = struct
   let rows g = Array.length g.data
   let cols g = Array.length g.data.(0)
 
-  let in_bounds g { row; col } =
+  let in_bounds g ({ row; col } : Coord.t) =
     0 <= row && row < rows g && 0 <= col && col < cols g
 
-  let get g { row; col } = g.data.(row).(col)
-  let set g { row; col } v = g.data.(row).(col) <- v
+  let max_coord g : Coord.t = { row = rows g - 1; col = cols g - 1 }
+  let get g ({ row; col } : Coord.t) = g.data.(row).(col)
+  let set g ({ row; col } : Coord.t) v = g.data.(row).(col) <- v
 
   let to_seqi g =
     Array.to_seqi g.data
     |> Seq.flat_map (fun (row_index, row) ->
            Array.to_seqi row
            |> Seq.map (fun (col_index, cell) ->
-                  ({ row = row_index; col = col_index }, cell)))
+                  ({ Coord.row = row_index; col = col_index }, cell)))
 
   let rows_seq g = Seq.init (rows g) Fun.id
   let cols_seq g = Seq.init (cols g) Fun.id

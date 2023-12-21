@@ -1,4 +1,6 @@
-type coord = Advent.Grid.coord
+module Coord = Advent.Coord
+
+type coord = Coord.t
 type cell = Space | Galaxy
 
 module Grid = Advent.Grid.Make (struct
@@ -57,7 +59,7 @@ let rec seq_pairs seq =
 
 let distance_sum galaxies =
   List.to_seq galaxies |> seq_pairs
-  |> Seq.map (fun (c1, c2) -> Advent.Grid.coord_dist c1 c2)
+  |> Seq.map (fun (c1, c2) -> Coord.dist c1 c2)
   |> Seq.fold_left ( + ) 0
 
 let dist_after_expand ~expand_factor image =

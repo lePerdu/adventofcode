@@ -12,7 +12,7 @@ module Grid = Advent.Grid.Make (struct
   let to_char = function Empty -> '.' | Cube -> '#' | Round -> 'O'
 end)
 
-type coord = Advent.Grid.coord
+type coord = Advent.Coord.t
 
 let read_input file_name = In_channel.with_open_text file_name Grid.input
 

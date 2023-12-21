@@ -1,7 +1,7 @@
+module Coord = Advent.Coord
+
 type tile = Empty | MirrorForward | MirrorBackward | SplitHoriz | SplitVert
-type direction = Up | Down | Left | Right
-type coord = Advent.Grid.coord
-type beam_state = { pos : coord; dir : direction }
+type beam_state = { pos : Coord.t; dir : Coord.dir }
 
 module Grid = Advent.Grid.Make (struct
   type t = tile
@@ -24,7 +24,7 @@ end)
 
 let read_input file_name = In_channel.with_open_text file_name Grid.input
 
-let coord_move ({ row; col } : coord) dir : coord =
+let coord_move ({ row; col } : Coord.t) (dir : Coord.dir) : Coord.t =
   match dir with
   | Up -> { row = row - 1; col }
   | Down -> { row = row + 1; col }
@@ -36,12 +36,12 @@ let step_beam grid { pos; dir } =
   match Grid.get grid pos with
   | Empty -> [ beam_move dir ]
   | MirrorForward ->
-      let new_dir =
+      let new_dir : Coord.dir =
         match dir with Up -> Right | Down -> Left | Left -> Down | Right -> Up
       in
       [ beam_move new_dir ]
   | MirrorBackward ->
-      let new_dir =
+      let new_dir : Coord.dir =
         match dir with Up -> Left | Down -> Right | Left -> Up | Right -> Down
       in
       [ beam_move new_dir ]
