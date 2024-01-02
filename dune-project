@@ -10,5 +10,5 @@
 (package
  (name advent_2023)
  (synopsis "Advent 2023 problems in OCaml")
- (depends ocaml dune bheap)
+ (depends bheap dune ocaml str)
  (allow_empty))
