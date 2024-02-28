@@ -1,5 +1,0 @@
-lib: [
-  "_build/install/default/lib/advent_2023/META"
-  "_build/install/default/lib/advent_2023/dune-package"
-  "_build/install/default/lib/advent_2023/opam"
-]
