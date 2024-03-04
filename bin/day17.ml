@@ -1,14 +1,10 @@
 module Coord = Advent.Coord
-
-module Grid = Advent.Grid.Make (struct
-  type t = int
-
-  let of_char = Advent.Util.digit_of_char
-  let to_char = Advent.Util.char_of_digit
-end)
+module Grid = Advent.Grid
 
 let read_input file_name =
-  let city = In_channel.with_open_text file_name Grid.input in
+  let city =
+    In_channel.with_open_text file_name (Grid.input Advent.Util.digit_of_char)
+  in
   let all_gt_0 = Grid.to_seqi city |> Seq.for_all (fun (_, v) -> v > 0) in
   if not all_gt_0 then failwith "Grid cells not all > 0" else city
 

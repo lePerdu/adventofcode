@@ -3,26 +3,25 @@ module Coord = Advent.Coord
 type tile = Empty | MirrorForward | MirrorBackward | SplitHoriz | SplitVert
 type beam_state = { pos : Coord.t; dir : Coord.dir }
 
-module Grid = Advent.Grid.Make (struct
-  type t = tile
+module Grid = Advent.Grid
 
-  let of_char = function
-    | '.' -> Some Empty
-    | '/' -> Some MirrorForward
-    | '\\' -> Some MirrorBackward
-    | '-' -> Some SplitHoriz
-    | '|' -> Some SplitVert
-    | _ -> None
+let tile_of_char = function
+  | '.' -> Some Empty
+  | '/' -> Some MirrorForward
+  | '\\' -> Some MirrorBackward
+  | '-' -> Some SplitHoriz
+  | '|' -> Some SplitVert
+  | _ -> None
 
-  let to_char = function
-    | Empty -> '.'
-    | MirrorForward -> '/'
-    | MirrorBackward -> '\\'
-    | SplitHoriz -> '-'
-    | SplitVert -> '|'
-end)
+(* let tile_to_char = function *)
+(*   | Empty -> '.' *)
+(*   | MirrorForward -> '/' *)
+(*   | MirrorBackward -> '\\' *)
+(*   | SplitHoriz -> '-' *)
+(*   | SplitVert -> '|' *)
 
-let read_input file_name = In_channel.with_open_text file_name Grid.input
+let read_input file_name =
+  In_channel.with_open_text file_name (Grid.input tile_of_char)
 
 let coord_move ({ row; col } : Coord.t) (dir : Coord.dir) : Coord.t =
   match dir with

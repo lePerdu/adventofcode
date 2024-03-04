@@ -1,20 +1,19 @@
 type cell = Empty | Cube | Round
 
-module Grid = Advent.Grid.Make (struct
-  type t = cell
+module Grid = Advent.Grid
 
-  let of_char = function
-    | '.' -> Some Empty
-    | '#' -> Some Cube
-    | 'O' -> Some Round
-    | _ -> None
+let cell_of_char = function
+  | '.' -> Some Empty
+  | '#' -> Some Cube
+  | 'O' -> Some Round
+  | _ -> None
 
-  let to_char = function Empty -> '.' | Cube -> '#' | Round -> 'O'
-end)
+(* let cell_to_char = function Empty -> '.' | Cube -> '#' | Round -> 'O' *)
 
 type coord = Advent.Coord.t
 
-let read_input file_name = In_channel.with_open_text file_name Grid.input
+let read_input file_name =
+  In_channel.with_open_text file_name (Grid.input cell_of_char)
 
 (* let find_north_stop_row platform (coord : coord) = *)
 (*   Seq.init coord.row (fun x -> coord.row - x - 1) *)
@@ -140,7 +139,7 @@ let rec run_cycles_direct n init =
 type repetition = {
   start_iteration : int;
   period : int;
-  repeated_state : Grid.t;
+  repeated_state : cell Grid.t;
 }
 
 let find_repeat_cycle init =
