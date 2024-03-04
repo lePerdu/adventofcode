@@ -1,16 +1,14 @@
 type tile = Ash | Rocks
 
-module Grid = Advent.Grid.Make (struct
-  type t = tile
+module Grid = Advent.Grid
 
-  let of_char = function '.' -> Some Ash | '#' -> Some Rocks | _ -> None
-  let to_char = function Ash -> '.' | Rocks -> '#'
-end)
+let tile_of_char = function '.' -> Some Ash | '#' -> Some Rocks | _ -> None
+(* let tile_to_char = function Ash -> '.' | Rocks -> '#' *)
 
 let read_input file_name =
   let rec loop ch =
     try
-      let next = Grid.input ch in
+      let next = Grid.input tile_of_char ch in
       next :: loop ch
     with End_of_file -> []
   in

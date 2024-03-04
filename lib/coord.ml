@@ -11,6 +11,10 @@ let min_coord = { row = Int.min_int; col = Int.min_int }
 let max_coord = { row = Int.max_int; col = Int.max_int }
 let bound_max = map2 Int.max
 let bound_min = map2 Int.min
+
+let compare c1 c2 =
+  match Int.compare c1.row c2.row with 0 -> Int.compare c1.col c2.col | c -> c
+
 let equal c1 c2 = c1.row == c2.row && c1.col == c2.col
 
 let hash { row; col } =

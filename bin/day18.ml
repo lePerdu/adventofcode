@@ -110,13 +110,7 @@ let inside_dir (path_dir : path_dir) (cur_dir : Coord.dir) : Coord.dir =
       | Left -> Down
       | Right -> Up)
 
-module RawGrid = Advent.Grid.Make (struct
-  type t = bool
-
-  let of_char _ = failwith "Not supported"
-  let to_char = function true -> '#' | false -> '.'
-end)
-
+module RawGrid = Advent.Grid
 module IntSet = Set.Make (Int)
 
 let extract_skip_values coord_part path =
@@ -145,7 +139,7 @@ let binary_search ~compare x arr =
 
 module DigGrid = struct
   type t = {
-    data : RawGrid.t;
+    data : bool RawGrid.t;
     row_offsets : int array;
     col_offsets : int array;
   }
@@ -153,45 +147,65 @@ module DigGrid = struct
   let make row_offsets col_offsets init =
     {
       data =
-        RawGrid.make (Array.length row_offsets * 2 - 1) (Array.length col_offsets * 2 - 1) init;
+        RawGrid.make
+          ((Array.length row_offsets * 2) - 1)
+          ((Array.length col_offsets * 2) - 1)
+          init;
       row_offsets;
       col_offsets;
     }
 
   let raw g = g.data
 
-  let resolve_row g row = binary_search ~compare:Int.compare row g.row_offsets * 2
-  let resolve_col g col = binary_search ~compare:Int.compare col g.col_offsets * 2
-  let resolve_coord g (c : Coord.t) : Coord.t = {row =resolve_row g c.row; col=resolve_col g c.col}
+  let resolve_row g row =
+    binary_search ~compare:Int.compare row g.row_offsets * 2
+
+  let resolve_col g col =
+    binary_search ~compare:Int.compare col g.col_offsets * 2
+
+  let resolve_coord g (c : Coord.t) : Coord.t =
+    { row = resolve_row g c.row; col = resolve_col g c.col }
 
   let compute_width offsets coord_val =
-    if coord_val mod 2 == 0 then 1 else
+    if coord_val mod 2 == 0 then 1
+    else
       let index = coord_val / 2 in
       offsets.(index + 1) - offsets.(index) - 1
+
   let row_width g = compute_width g.row_offsets
   let col_width g = compute_width g.col_offsets
-  let coord_volume g ( {row;col} : Coord.t) = row_width g row * col_width g col
+
+  let coord_volume g ({ row; col } : Coord.t) =
+    row_width g row * col_width g col
 
   let filled_volume g =
     RawGrid.to_seqi g.data
     |> Seq.filter (fun (_, v) -> v)
     |> Seq.map (fun (pos, _) -> coord_volume g pos)
-    |> Seq.fold_left (+) 0
+    |> Seq.fold_left ( + ) 0
 
   let resolve_line_seq g line =
     let a = resolve_coord g line.start in
     let b = resolve_coord g (line_seg_end line) in
     match line.dir with
-    | Up -> Seq.init (a.row - b.row) (fun drow : Coord.t -> {row = a.row - 1 - drow; col = a.col})
-    | Down -> Seq.init (b.row - a.row) (fun drow : Coord.t -> {row = a.row + 1 + drow; col = a.col})
-    | Left-> Seq.init (a.col - b.col) (fun dcol : Coord.t -> {row = a.row; col = a.col - 1 - dcol})
-    | Right -> Seq.init (b.col - a.col) (fun dcol : Coord.t -> {row = a.row; col = a.col + 1 + dcol})
+    | Up ->
+        Seq.init (a.row - b.row) (fun drow : Coord.t ->
+            { row = a.row - 1 - drow; col = a.col })
+    | Down ->
+        Seq.init (b.row - a.row) (fun drow : Coord.t ->
+            { row = a.row + 1 + drow; col = a.col })
+    | Left ->
+        Seq.init (a.col - b.col) (fun dcol : Coord.t ->
+            { row = a.row; col = a.col - 1 - dcol })
+    | Right ->
+        Seq.init (b.col - a.col) (fun dcol : Coord.t ->
+            { row = a.row; col = a.col + 1 + dcol })
 
-  let draw_line g line = resolve_line_seq g line |> Seq.iter (fun pos -> RawGrid.set g.data pos true)
+  let draw_line g line =
+    resolve_line_seq g line |> Seq.iter (fun pos -> RawGrid.set g.data pos true)
 end
 
-let draw_trench grid path =
-  Array.iter (DigGrid.draw_line grid) path
+let draw_trench grid path = Array.iter (DigGrid.draw_line grid) path
 
 let expand_fill grid pos =
   let queue = Stack.create () in
@@ -215,15 +229,16 @@ let fill_trench grid path =
   Array.iter
     (fun seg ->
       DigGrid.resolve_line_seq grid seg
-      |> Seq.iter
-           (fun pos ->
+      |> Seq.iter (fun pos ->
              let inside_pos = Coord.add_dir pos (inside_dir path_dir seg.dir) in
              expand_fill (DigGrid.raw grid) inside_pos))
     path
 
 let part1 input =
   let path = trench_path_segs input in
-  let grid = DigGrid.make (trench_path_skip_rows path) (trench_path_skip_cols path) false in
+  let grid =
+    DigGrid.make (trench_path_skip_rows path) (trench_path_skip_cols path) false
+  in
   draw_trench grid path;
   fill_trench grid path;
   DigGrid.filled_volume grid

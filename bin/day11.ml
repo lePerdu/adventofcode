@@ -3,14 +3,13 @@ module Coord = Advent.Coord
 type coord = Coord.t
 type cell = Space | Galaxy
 
-module Grid = Advent.Grid.Make (struct
-  type t = cell
+module Grid = Advent.Grid
 
-  let of_char = function '.' -> Some Space | '#' -> Some Galaxy | _ -> None
-  let to_char = function Space -> '.' | Galaxy -> '#'
-end)
+let cell_of_char = function '.' -> Some Space | '#' -> Some Galaxy | _ -> None
+(* let cell_to_char = function Space -> '.' | Galaxy -> '#' *)
 
-let read_input file_name = In_channel.with_open_text file_name Grid.input
+let read_input file_name =
+  In_channel.with_open_text file_name (Grid.input cell_of_char)
 
 let galaxy_coords grid =
   Grid.to_seqi grid
