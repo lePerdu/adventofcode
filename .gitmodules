@@ -1,0 +1,18 @@
+[submodule "2018"]
+	path = 2018
+	url = ./2018
+[submodule "2019"]
+	path = 2019
+	url = ./2019
+[submodule "2020"]
+	path = 2020
+	url = ./2020
+[submodule "2021"]
+	path = 2021
+	url = ./2021
+[submodule "2022"]
+	path = 2022
+	url = ./2022
+[submodule "2023"]
+	path = 2023
+	url = ./2023
