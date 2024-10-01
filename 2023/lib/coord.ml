@@ -5,6 +5,8 @@ let map f c = { row = f c.row; col = f c.col }
 let map2 f a b = { row = f a.row b.row; col = f a.col b.col }
 let add = map2 ( + )
 let sub = map2 ( - )
+let mul = map2 ( * )
+let div = map2 ( / )
 let neg = map Int.neg
 let scale n = map (Int.mul n)
 let min_coord = { row = Int.min_int; col = Int.min_int }
@@ -70,3 +72,10 @@ let dir_name = function
   | Down -> "down"
   | Left -> "left"
   | Right -> "right"
+
+let iter_inside f bound =
+  for row = 0 to bound.row - 1 do
+    for col = 0 to bound.col - 1 do
+      f { row; col }
+    done
+  done
