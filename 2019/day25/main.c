@@ -166,7 +166,7 @@ int main(void) {
   read_input_from_file(&input, f);
   fclose(f);
 
-  // record(&input);
+  record(&input);
   part1(&input);
   return 0;
 }
