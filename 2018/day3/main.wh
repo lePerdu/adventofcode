@@ -1,0 +1,148 @@
+(def! make-point cons)
+(defn! point? (p)
+  (and (cons? p) (number? (car p)) (number? (cdr p))))
+(def! point-x car)
+(def! point-y cdr)
+
+(defrecord! <claim>
+  make-claim
+  claim?
+  (id claim-id)
+  (coord claim-coord)
+  (size claim-size))
+
+(defn! claim-range-for-each (f claim)
+  (let*
+    ((c (claim-coord claim))
+     (s (claim-size claim))
+     (start-row (point-y c))
+     (end-row (int+ (point-y s) start-row))
+     (start-col (point-x c))
+     (end-col (int+ (point-x s) start-col)))
+    (for ((row start-row (inc row)))
+        ((int>= row end-row))
+      (for ((col start-col (inc col)))
+          ((int>= col end-col))
+        (f row col)))))
+
+(defn! string-index= (line target)
+  (string-index line (fn (ch) (char= ch target))))
+
+(defn! parse-claim (line)
+  (let*
+    ((line (string-trim line))
+     (hash-pos (string-index= line #\#))
+     (at-pos (string-index= line #\@))
+     (comma-pos (string-index= line #\,))
+     (colon-pos (string-index= line #\:))
+     (x-pos (string-index= line #\x)))
+    (make-claim
+      (string->int (substring line (inc hash-pos) (dec at-pos)))
+      (make-point
+        (string->int (substring line (int+ 2 at-pos) comma-pos))
+        (string->int (substring line (inc comma-pos) colon-pos)))
+      (make-point
+        (string->int (substring line (int+ 2 colon-pos) x-pos))
+        (string->int (substring line (inc x-pos)))))))
+
+(defn! read-input ()
+  (let ((line (read-line)))
+    (if (or (eof-object? line) (string-null? (string-trim line)))
+      nil
+      (cons
+        (parse-claim line)
+        (read-input)))))
+
+(defrecord! <grid>
+  _make-grid
+  grid?
+  (rows grid-rows)
+  (cols grid-cols)
+  (data grid-data))
+
+(defn-case! make-grid
+  ((rows cols) (_make-grid rows cols (make-array (int* rows cols))))
+  ((rows cols fill) (_make-grid rows cols (make-array (int* rows cols) fill))))
+
+(defn-case! make-square-grid
+  ((size) (make-grid size size))
+  ((size fill) (make-grid size size fill)))
+
+(defn! grid-index (g row col)
+  (int+ (int* (grid-cols g) row) col))
+
+(defn! grid-get (g row col)
+  (array-get (grid-data g) (int+ (int* (grid-cols g) row) col)))
+
+(defn! grid-set! (g row col v)
+  (array-set! (grid-data g) (grid-index g row col) v))
+
+(defn! grid-update! (g row col f)
+  (array-update! (grid-data g) (grid-index g row col) f))
+
+(defn! grid-for-each-index (f grid)
+  (let ((cols (grid-cols grid)))
+    (array-for-each-index
+      (fn (i x)
+        (f (int/ i cols) (rem i cols) x))
+      (grid-data grid))))
+
+(defn! grid-fold (init f grid)
+  (array-foldl init f (grid-data grid)))
+
+(defn! for-each-claim-pos (f input)
+  (array-for-each
+    (fn (claim)
+      (claim-range-for-each
+        (fn (row col)
+          (f claim row col))
+        claim))
+    input))
+
+(defn! compute-cut-grid (input)
+  (let ((grid (make-square-grid 1000 0)))
+    (for-each-claim-pos
+      (fn (claim row col)
+        (grid-update! grid row col inc))
+      input)
+    grid))
+
+(defn! count>1 (grid)
+  (grid-fold 0 (fn (acc x) (if (int> x 1) (inc acc) acc)) grid))
+
+(defn! part1 (input)
+  (count>1 (compute-cut-grid input)))
+
+(defn! mark-overlapped (arr id)
+  (array-set! arr (dec id) true))
+
+(defn! array-index (arr pred)
+  (for ((i 0 (inc i)))
+    ((or (int>= i (array-length arr)) (pred (array-get arr i)))
+     i)))
+
+(defn! find-non-overlapping (input)
+  (let
+   ((grid (make-square-grid 1000 nil))
+    (overlapped (make-array (array-length input) false)))
+   (for-each-claim-pos
+     (fn (claim row col)
+       (grid-update! grid row col
+         (fn (existing)
+           (when (not (null? existing))
+             (mark-overlapped overlapped (claim-id claim))
+             (mark-overlapped overlapped existing))
+           (claim-id claim))))
+     input)
+   (let ((found-index (array-index overlapped not)))
+     (array-get input found-index))))
+
+(defn! part2 (input)
+  (claim-id (find-non-overlapping input)))
+
+(def! input
+  (list->array
+    (with-input-from-file "input.txt" read-input)))
+
+(println "Part1:" (part1 input))
+(println "Part2:" (part2 input))

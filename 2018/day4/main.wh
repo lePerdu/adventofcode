@@ -1,0 +1,109 @@
+(defn! read-input ()
+  (let ((line (read-line)))
+    (if (eof-object? line)
+      nil
+      (cons
+        (parse-entry line)
+        (read-input)))))
+
+(defrecord! <event-record>
+  make-event-record
+  event-record?
+  (orig record-orig)
+  (timestamp record-timestamp)
+  (event record-event))
+
+(defn! month-days (m)
+  (case m
+    ((1 3 5 7 8 10 12) 31)
+    ((4 6 9 11) 30)
+    ((2) 28)))
+
+(defn! month->days-in-year (m)
+  (if (= m 1) 0 (int+ (month-days (dec m)) (month->days-in-year (dec m)))))
+
+(def! *base-year* 1518)
+
+(defn! parse-timestamp (str)
+  (let
+    ((year (string->int (substring str 0 4)))
+     (month (string->int (substring str 5 7)))
+     (day (string->int (substring str 8 10)))
+     (hour (string->int (substring str 11 13)))
+     (minute (string->int (substring str 14 16))))
+    (int+
+      (int*
+        60
+        (int+
+          (int*
+            24
+            (+ (dec day) (month->days-in-year month) (int* (int- year *base-year*) 365)))
+          hour))
+      minute)))
+(defn! timestamp-minutes (ts) ts)
+
+(defn! parse-event (event-str)
+  (cond
+    ((string-prefix? "Guard" event-str)
+      (let*
+        ((hash-index (string-index event-str (fn (c) (char= c #\#))))
+         (end-id-index (string-index event-str char-blank? hash-index))
+         (num (string->int (substring event-str (inc hash-index) end-id-index))))
+        (cons 'begin num)))
+    ((string-prefix? "falls" event-str) 'sleep)
+    ((string-prefix? "wakes" event-str) 'wake)
+    (else (error "invalid record" event-str))))
+
+(defn! parse-entry (line)
+  (make-event-record
+    line
+    (parse-timestamp (substring line 1 17))
+    (parse-event (substring line 19))))
+
+(defn! event-before (e1 e2) (int< (record-timestamp e1) (record-timestamp e2)))
+
+(defrecord! nap-event
+  make-nap-event
+  nap-event?
+  (guard-id nap-event-guard)
+  (start nap-start)
+  (end nap-end))
+
+(defn! nap-duration (nap) (int- (nap-end nap) (nap-start nap)))
+
+(defn! snoc (l x) (cons x l))
+
+(defn! extract-naps (f)
+  (let ((guard-id (atom nil)) (sleep-start (atom nil)))
+    (fn (result event)
+      (cond
+        ((= 'sleep (record-event event))
+          (if @sleep-start
+            (error "duplicate sleep" event)
+            (do
+              (reset! sleep-start (record-timestamp event))
+              result)))
+        ((= 'wake (record-event event))
+          (let ((start @sleep-start))
+            (if start
+              (do
+                (reset! sleep-start nil)
+                (f result (make-nap-event @guard-id start (record-timestamp event))))
+              (error "no sleep for wake" event))))
+        (else
+          (reset! guard-id (cdr (record-event event)))
+          result)))))
+
+(defn! group-by (key)
+  (fn (result event)
+    (hash-table-update! result (key event) (fn (existing) (cons event existing)) nil)
+    result))
+
+(defn! collect-naps (sorted-records)
+  (foldl
+    (make-=-hash-table)
+    (extract-naps (group-by nap-event-guard))
+    sorted-records))
+
+(def! input (with-input-from-file "input.txt" read-input))
+(def! sorted-input (sort input event-before))

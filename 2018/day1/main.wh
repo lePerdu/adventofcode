@@ -1,0 +1,38 @@
+(defn! read-input ()
+  (let ((line (read-line)))
+    (if (eof-object? line)
+      nil
+      (cons
+        (string->int (string-trim line))
+        (read-input)))))
+
+(defn! part1 (input)
+  (sum input))
+
+(defn! cycle-list (l)
+  (let ((state (atom l)))
+    (fn ()
+      (do
+        (if (null? @state)
+          (reset! state l))
+        (let ((current @state))
+          (do
+            (reset! state (cdr current))
+            (car current)))))))
+
+(defn! find-repeated (acc existing iter)
+  (let* ((next (iter)) (next-acc (int+ acc next)))
+    (if (hash-table-contains? existing next-acc)
+      next-acc
+      (do
+        (hash-table-set! existing next-acc nil)
+        (find-repeated next-acc existing iter)))))
+
+(defn! part2 (input)
+  (find-repeated 0 (make-=-hash-table) (cycle-list input)))
+
+(def! input
+  (with-input-from-file "input.txt" read-input))
+
+(println "Part1:" (part1 input))
+(println "Part2:" (part2 input))
