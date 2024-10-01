@@ -1,0 +1,99 @@
+(defn! read-input ()
+  (let ((line (read-line)))
+    (if (eof-object? line)
+      nil
+      (cons (string-trim line) (read-input)))))
+
+(defn! (make-char-hist) (make-array 26 0))
+(defn! char->index (c) (int- (char->int c) (char->int #\a)))
+(defn! index->char (index) (int->char (int+ index (char->int #\a))))
+(defn! char-hist-add! (hist c)
+  (array-update! hist (char->index c) inc))
+(defn! char-hist-get (hist c)
+  (array-get hist (char->index c)))
+(defn! char-hist-for-each (f hist)
+  (array-for-each-index
+    (fn (index count) (f (index->char index) count))
+    hist))
+;; Return first character with the specified count, or nil
+(defn! char-hist-char-with-count (hist req-count)
+  (let/ec return
+    (do
+      (char-hist-for-each
+        (fn (char count)
+          (if (= count req-count) (return char)))
+        hist)
+      nil)))
+
+(defn! char-hist-for-string (s)
+  (let ((hist (make-char-hist)))
+    (do
+      (string-for-each
+        (fn (ch) (char-hist-add! hist ch))
+        s)
+      hist)))
+
+(defn! string-has-count? (s n)
+  (let ((hist (char-hist-for-string s)))
+    (char-hist-char-with-count hist n)))
+
+(defn! count-matching (p l)
+  (foldl 0 (fn (acc x) (if (p x) (inc acc) acc)) l))
+
+(defn! count-with-letter-count (n l)
+  (count-matching
+    (fn (str) (string-has-count? str n))
+    l))
+
+(defn! part1 (input)
+  (let
+    ((with2 (count-with-letter-count 2 input))
+     (with3 (count-with-letter-count 3 input)))
+    (int* with2 with3)))
+
+(defn! for-each-pair (f start end)
+  (for ((i start (inc i))) ((>= i end))
+    (for ((j (inc i) (inc j))) ((>= j end))
+      (f i j))))
+
+(defn! array-for-each-pair (f arr)
+  (for-each-pair
+    (fn (i j) (f (array-get arr i) (array-get arr j)))
+    0
+    (array-length arr)))
+
+(defn! fold-range (acc f start end)
+  (if (int>= start end)
+    acc
+    (fold-range (f acc start) f (inc start) end)))
+
+(defn! string-diff-indices (s1 s2)
+  (fold-range
+    nil
+    (fn (acc index)
+      (if (not (char= (string-get s1 index) (string-get s2 index)))
+        (cons index acc)
+        acc))
+    0
+    (string-count s1)))
+
+(defn! string-splice-out (s index)
+  (string-concat (substring s 0 index) (substring s (inc index))))
+
+(defn! part2 (input)
+  (let ((input (list->array input)))
+    (let/ec return
+      (do
+        (array-for-each-pair
+          (fn (s1 s2)
+            (let ((diff (string-diff-indices s1 s2)))
+              (if (= 1 (count diff))
+                (return (string-splice-out s1 (car diff))))))
+          input)
+        (error "no single-index difference found")))))
+
+(def! input
+  (with-input-from-file "input.txt" read-input))
+
+(println "Part1:" (part1 input))
+(println "Part2:" (part2 input))
