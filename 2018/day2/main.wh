@@ -4,7 +4,7 @@
       nil
       (cons (string-trim line) (read-input)))))
 
-(defn! (make-char-hist) (make-array 26 0))
+(defn! make-char-hist () (make-array 26 0))
 (defn! char->index (c) (int- (char->int c) (char->int #\a)))
 (defn! index->char (index) (int->char (int+ index (char->int #\a))))
 (defn! char-hist-add! (hist c)
