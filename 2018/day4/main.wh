@@ -13,6 +13,8 @@
   (timestamp record-timestamp)
   (event record-event))
 
+(def! guard-id? int?)
+
 (defn! month-days (m)
   (case m
     ((1 3 5 7 8 10 12) 31)
@@ -21,6 +23,17 @@
 
 (defn! month->days-in-year (m)
   (if (= m 1) 0 (int+ (month-days (dec m)) (month->days-in-year (dec m)))))
+
+(def! *month-cutoffs*
+  (let ((cutoffs (make-array 12)))
+    (let-named loop ((month 1) (acc 0))
+      (if (int> month 12)
+        cutoffs
+        (do
+          (array-set! cutoffs (dec month) acc)
+          (loop (inc month) (int+ acc (month-days month))))))))
+
+(defn! month-cutoff (m) (array-get *month-cutoffs* (dec m)))
 
 (def! *base-year* 1518)
 
@@ -31,16 +44,47 @@
      (day (string->int (substring str 8 10)))
      (hour (string->int (substring str 11 13)))
      (minute (string->int (substring str 14 16))))
+    (if (not (= year *base-year*)) (raise "expected year to be 1518"))
     (int+
       (int*
         60
         (int+
           (int*
             24
-            (+ (dec day) (month->days-in-year month) (int* (int- year *base-year*) 365)))
+            (+ (dec day) (month->days-in-year month)))
           hour))
       minute)))
 (defn! timestamp-minutes (ts) ts)
+
+(defn! timestamp-minutes-part (ts) (rem ts 60))
+(defn! timestamp-hours-part (ts) (rem (int/ ts 60) 24))
+(defn! timestamp-year-part (ts) *base-year*)
+(defn! timestamp-day-of-year-part (ts) (int/ ts (int* 60 24)))
+(defn! timestamp-month-part (ts)
+  (let ((doy (timestamp-day-of-year-part ts)))
+    (let-named loop ((month 12))
+      (if (int> doy (month-cutoff month))
+        month
+        (loop (dec month))))))
+(defn! timestamp-day-part (ts)
+  (let*
+    ((month (timestamp-month-part ts))
+     (days-before-month (month-cutoff month))
+     (days-in-month (int- (timestamp-day-of-year-part ts) days-before-month)))
+    (inc days-in-month)))
+
+(defn! timestamp->iso (ts)
+  ; TODO: 0-pad numbers
+  (string-concat
+    (->string (timestamp-year-part ts))
+    "-"
+    (->string (timestamp-month-part ts))
+    "-"
+    (->string (timestamp-day-part ts))
+    " "
+    (->string (timestamp-hours-part ts))
+    ":"
+    (->string (timestamp-minutes-part ts))))
 
 (defn! parse-event (event-str)
   (cond
@@ -49,7 +93,7 @@
         ((hash-index (string-index event-str (fn (c) (char= c #\#))))
          (end-id-index (string-index event-str char-blank? hash-index))
          (num (string->int (substring event-str (inc hash-index) end-id-index))))
-        (cons 'begin num)))
+        num))
     ((string-prefix? "falls" event-str) 'sleep)
     ((string-prefix? "wakes" event-str) 'wake)
     (else (error "invalid record" event-str))))
@@ -65,7 +109,7 @@
 (defrecord! nap-event
   make-nap-event
   nap-event?
-  (guard-id nap-event-guard)
+  (guard-id nap-guard-id)
   (start nap-start)
   (end nap-end))
 
@@ -76,14 +120,14 @@
 (defn! extract-naps (f)
   (let ((guard-id (atom nil)) (sleep-start (atom nil)))
     (fn (result event)
-      (cond
-        ((= 'sleep (record-event event))
+      (let-cond (ev (record-event event))
+        ((= 'sleep ev)
           (if @sleep-start
             (error "duplicate sleep" event)
             (do
               (reset! sleep-start (record-timestamp event))
               result)))
-        ((= 'wake (record-event event))
+        ((= 'wake ev)
           (let ((start @sleep-start))
             (if start
               (do
@@ -91,7 +135,7 @@
                 (f result (make-nap-event @guard-id start (record-timestamp event))))
               (error "no sleep for wake" event))))
         (else
-          (reset! guard-id (cdr (record-event event)))
+          (reset! guard-id ev)
           result)))))
 
 (defn! group-by (key)
@@ -102,8 +146,73 @@
 (defn! collect-naps (sorted-records)
   (foldl
     (make-=-hash-table)
-    (extract-naps (group-by nap-event-guard))
+    (extract-naps (group-by nap-guard-id))
     sorted-records))
+
+(defn! print-event (ev)
+  (print (timestamp->iso (record-timestamp ev)))
+  (print " ")
+  (print (let-cond (event (record-event ev))
+    ((= event 'sleep) "falls asleep")
+    ((= event 'wake) "wakes up")
+    ((guard-id? event) (string-concat "Guard #" (->string event) " begins shift"))
+    (else (raise "invalid event")))))
+
+(defn! nap-duration (nap) (int- (nap-end nap) (nap-start nap)))
+(defn! nap-contains (nap minute)
+  (and
+    (<= (timestamp-minutes-part (nap-start nap)) minute)
+    (< minute (timestamp-minutes-part (nap-end nap)))))
+
+(defn! print-nap (nap)
+  (println
+    (timestamp->iso (nap-start nap))
+    "-"
+    (timestamp->iso (nap-end nap))
+    "[" (nap-duration nap) "]"))
+
+(defn! find-longest-napper (naps-by-guard)
+  (car
+    (hash-table-fold
+      (cons 0 0)
+      (fn (acc-max guard-id naps)
+        (let ((total-dur (foldl 0 (fn (acc nap) (int+ acc (nap-duration nap))) naps)))
+          (if (int> total-dur (cdr acc-max))
+            (cons guard-id total-dur)
+            acc-max)))
+      naps-by-guard)))
+
+(defn! find-most-common-stats (naps)
+  (let ((naps-by-minute (make-array 60 0)) (most-common (atom (cons 0 0))))
+    (for-each
+      (fn (nap)
+        (let
+          ((start (timestamp-minutes-part (nap-start nap)))
+           (end (timestamp-minutes-part (nap-end nap))))
+          (let-named loop ((i start))
+            (if (int< i end)
+              (do
+                (array-update! naps-by-minute i inc)
+                (loop (inc i)))))))
+      naps)
+    (array-for-each-index
+      (fn (minute count)
+        (if (int> count (cdr @most-common))
+          (reset! most-common (cons minute count))))
+      naps-by-minute)
+    @most-common))
 
 (def! input (with-input-from-file "input.txt" read-input))
 (def! sorted-input (sort input event-before))
+(def! naps-by-guard (collect-naps sorted-input))
+
+(defn! part1 ()
+  (let*
+    ((longest-napper (find-longest-napper naps-by-guard))
+     (most-common-stats
+      (find-most-common-stats
+        (hash-table-get naps-by-guard longest-napper 'missing)))
+     (most-common-minute (car most-common-stats)))
+    (int* longest-napper most-common-minute)))
+
+(println "Part1:" (part1))
