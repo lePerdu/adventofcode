@@ -182,6 +182,7 @@
             acc-max)))
       naps-by-guard)))
 
+;; Returns: (most-common-minute . times-slept-for-minute)
 (defn! find-most-common-stats (naps)
   (let ((naps-by-minute (make-array 60 0)) (most-common (atom (cons 0 0))))
     (for-each
@@ -215,4 +216,17 @@
      (most-common-minute (car most-common-stats)))
     (int* longest-napper most-common-minute)))
 
+(defn! part2 ()
+  (let
+    ((most-common-nap (hash-table-fold
+      '(0 0 0) ;; (guard-id minute times-slept)
+      (fn (acc-max guard-id naps)
+        (let-cons ((minute . times) (find-most-common-stats naps))
+          (if (int> times (caddr acc-max))
+            (list guard-id minute times)
+            acc-max)))
+      naps-by-guard)))
+    (int* (car most-common-nap) (cadr most-common-nap))))
+
 (println "Part1:" (part1))
+(println "Part2:" (part2))
