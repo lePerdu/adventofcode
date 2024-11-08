@@ -24,17 +24,6 @@
 (defn! month->days-in-year (m)
   (if (= m 1) 0 (int+ (month-days (dec m)) (month->days-in-year (dec m)))))
 
-(def! *month-cutoffs*
-  (let ((cutoffs (make-array 12)))
-    (let-named loop ((month 1) (acc 0))
-      (if (int> month 12)
-        cutoffs
-        (do
-          (array-set! cutoffs (dec month) acc)
-          (loop (inc month) (int+ acc (month-days month))))))))
-
-(defn! month-cutoff (m) (array-get *month-cutoffs* (dec m)))
-
 (def! *base-year* 1518)
 
 (defn! parse-timestamp (str)
@@ -55,36 +44,7 @@
           hour))
       minute)))
 (defn! timestamp-minutes (ts) ts)
-
 (defn! timestamp-minutes-part (ts) (rem ts 60))
-(defn! timestamp-hours-part (ts) (rem (int/ ts 60) 24))
-(defn! timestamp-year-part (ts) *base-year*)
-(defn! timestamp-day-of-year-part (ts) (int/ ts (int* 60 24)))
-(defn! timestamp-month-part (ts)
-  (let ((doy (timestamp-day-of-year-part ts)))
-    (let-named loop ((month 12))
-      (if (int> doy (month-cutoff month))
-        month
-        (loop (dec month))))))
-(defn! timestamp-day-part (ts)
-  (let*
-    ((month (timestamp-month-part ts))
-     (days-before-month (month-cutoff month))
-     (days-in-month (int- (timestamp-day-of-year-part ts) days-before-month)))
-    (inc days-in-month)))
-
-(defn! timestamp->iso (ts)
-  ; TODO: 0-pad numbers
-  (string-concat
-    (->string (timestamp-year-part ts))
-    "-"
-    (->string (timestamp-month-part ts))
-    "-"
-    (->string (timestamp-day-part ts))
-    " "
-    (->string (timestamp-hours-part ts))
-    ":"
-    (->string (timestamp-minutes-part ts))))
 
 (defn! parse-event (event-str)
   (cond
@@ -149,27 +109,11 @@
     (extract-naps (group-by nap-guard-id))
     sorted-records))
 
-(defn! print-event (ev)
-  (print (timestamp->iso (record-timestamp ev)))
-  (print " ")
-  (print (let-cond (event (record-event ev))
-    ((= event 'sleep) "falls asleep")
-    ((= event 'wake) "wakes up")
-    ((guard-id? event) (string-concat "Guard #" (->string event) " begins shift"))
-    (else (raise "invalid event")))))
-
 (defn! nap-duration (nap) (int- (nap-end nap) (nap-start nap)))
 (defn! nap-contains (nap minute)
   (and
     (<= (timestamp-minutes-part (nap-start nap)) minute)
     (< minute (timestamp-minutes-part (nap-end nap)))))
-
-(defn! print-nap (nap)
-  (println
-    (timestamp->iso (nap-start nap))
-    "-"
-    (timestamp->iso (nap-end nap))
-    "[" (nap-duration nap) "]"))
 
 (defn! find-longest-napper (naps-by-guard)
   (car
