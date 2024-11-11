@@ -134,11 +134,9 @@
         (let
           ((start (timestamp-minutes-part (nap-start nap)))
            (end (timestamp-minutes-part (nap-end nap))))
-          (let-named loop ((i start))
-            (if (int< i end)
-              (do
-                (array-update! naps-by-minute i inc)
-                (loop (inc i)))))))
+          (for ((i start (inc i)))
+              ((int>= i end))
+            (array-update! naps-by-minute i inc))))
       naps)
     (array-for-each-index
       (fn (minute count)

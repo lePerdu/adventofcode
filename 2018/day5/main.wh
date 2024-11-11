@@ -14,10 +14,8 @@
 (defn! make-dlist () (_make-dlist nil nil))
 
 (defn! dlist-length (dl)
-  (let-named loop ((node (dlist-head dl)) (n 0))
-    (if (null? node)
-      n
-      (loop (dlist-node-next node) (inc n)))))
+  (for ((n 0 (inc n)) (node (dlist-head dl) (dlist-node-next node)))
+      ((null? node) n)))
 
 (defn! dlist-append! (dl value)
   (let*
@@ -68,10 +66,9 @@
         (loop (dlist-node-next focus))))))
 
 (defn! print-polymer (dl)
-  (let-named loop ((node (dlist-head dl)))
-    (when (not (null? node))
-      (print (dlist-node-value node))
-      (loop (dlist-node-next node))))
+  (for ((node (dlist-head dl) (dlist-node-next node)))
+      ((null? node))
+    (print (dlist-node-value node)))
   (println))
 
 (defn! part1 (input)
@@ -80,13 +77,10 @@
 
 (defn! copy-without-unit (polymer unit)
   (let ((copy (make-dlist)))
-    (let-named loop ((node (dlist-head polymer)))
-      (if (null? node)
-        copy
-        (do
-          (if (not (same-unit? (dlist-node-value node) unit))
-            (dlist-append! copy (dlist-node-value node)))
-          (loop (dlist-node-next node)))))))
+    (for ((node (dlist-head polymer) (dlist-node-next node)))
+        ((null? node) copy)
+      (if (not (same-unit? (dlist-node-value node) unit))
+        (dlist-append! copy (dlist-node-value node))))))
 
 (defn! part2 (input)
   (let-named loop ((unit #\A) (shortest (cons nil (dlist-length input))))
