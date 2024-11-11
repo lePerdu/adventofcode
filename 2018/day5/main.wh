@@ -93,7 +93,7 @@
             (cons unit removed-length)
             shortest))))))
 
-(def! input (make-polymer-chain (read-input (current-input-port))))
+(def! input (make-polymer-chain (call-with-input-file "input.txt" read-input)))
 
 (println "Part 1:" (part1 input))
 (println "Part 2:" (part2 input))
