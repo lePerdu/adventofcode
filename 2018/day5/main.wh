@@ -1,0 +1,105 @@
+(def-mutable-record! <dlist-node>
+  make-dlist-node
+  dlist-node?
+  (prev dlist-node-prev set-dlist-node-prev!)
+  (next dlist-node-next set-dlist-node-next!)
+  (value dlist-node-value set-dlist-node-value!))
+
+(def-mutable-record! <dlist>
+  _make-dlist
+  dlist?
+  (head dlist-head set-dlist-head!)
+  (tail dlist-tail set-dlist-tail!))
+
+(defn! make-dlist () (_make-dlist nil nil))
+
+(defn! dlist-length (dl)
+  (let-named loop ((node (dlist-head dl)) (n 0))
+    (if (null? node)
+      n
+      (loop (dlist-node-next node) (inc n)))))
+
+(defn! dlist-append! (dl value)
+  (let*
+    ((tail (dlist-tail dl))
+     (node (make-dlist-node tail nil value)))
+    (if (null? tail)
+      (set-dlist-head! dl node)
+      (set-dlist-node-next! tail node))
+    (set-dlist-tail! dl node)))
+
+(defn! dlist-remove! (dl node)
+  (if (null? (dlist-node-prev node))
+    (set-dlist-head! dl (dlist-node-next node))
+    (set-dlist-node-next! (dlist-node-prev node) (dlist-node-next node)))
+  (if (null? (dlist-node-next node))
+    (set-dlist-tail! dl (dlist-node-prev node))
+    (set-dlist-node-prev! (dlist-node-next node) (dlist-node-prev node))))
+
+;; More optimized function to remove a sub list from node1 to node2 (inclusive)
+(defn! dlist-remove-range! (dl node1 node2)
+  (if (null? (dlist-node-prev node1))
+    (set-dlist-head! dl (dlist-node-next node1))
+    (set-dlist-node-next! (dlist-node-prev node1) (dlist-node-next node2)))
+  (if (null? (dlist-node-next node2))
+    (set-dlist-tail! dl (dlist-node-prev node2))
+    (set-dlist-node-prev! (dlist-node-next node2) (dlist-node-prev node1))))
+
+(defn! read-input (port) (string-trim (input-port-read-line port)))
+
+(defn! make-polymer-chain (units)
+  (string-foldl (make-dlist) (fn (dl unit) (dlist-append! dl unit) dl) units))
+
+(defn! same-unit? (a b)
+  (char= (char-upper a) (char-upper b)))
+
+(defn! can-react? (c1 c2)
+  (and (not (char= c1 c2)) (same-unit? c1 c2)))
+
+(defn! react! (polymer)
+  (let-named loop ((focus (dlist-head polymer)))
+    (let-if (next (and focus (dlist-node-next focus)))
+      (if (can-react? (dlist-node-value focus) (dlist-node-value next))
+        (do
+          (dlist-remove! polymer focus)
+          (dlist-remove! polymer next)
+          (loop
+            (or (dlist-node-prev focus) (dlist-head polymer))))
+        (loop (dlist-node-next focus))))))
+
+(defn! print-polymer (dl)
+  (let-named loop ((node (dlist-head dl)))
+    (when (not (null? node))
+      (print (dlist-node-value node))
+      (loop (dlist-node-next node))))
+  (println))
+
+(defn! part1 (input)
+  (react! input)
+  (dlist-length input))
+
+(defn! copy-without-unit (polymer unit)
+  (let ((copy (make-dlist)))
+    (let-named loop ((node (dlist-head polymer)))
+      (if (null? node)
+        copy
+        (do
+          (if (not (same-unit? (dlist-node-value node) unit))
+            (dlist-append! copy (dlist-node-value node)))
+          (loop (dlist-node-next node)))))))
+
+(defn! part2 (input)
+  (let-named loop ((unit #\A) (shortest (cons nil (dlist-length input))))
+    (if (char> unit #\Z)
+      (cdr shortest)
+      (loop
+        (int->char (inc (char->int unit)))
+        (let ((removed-length (part1 (copy-without-unit input unit))))
+          (if (int< removed-length (cdr shortest))
+            (cons unit removed-length)
+            shortest))))))
+
+(def! input (make-polymer-chain (read-input (current-input-port))))
+
+(println "Part 1:" (part1 input))
+(println "Part 2:" (part2 input))
