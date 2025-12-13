@@ -1,0 +1,263 @@
+(def-mutable-record! <parse-state>
+  make-parse-state
+  parse-state?
+  (input parse-state-input)
+  (pos parse-state-pos parse-state-set-pos!))
+
+(defn! _parse/eof? (p)
+  (int>= (parse-state-pos p) (string-count (parse-state-input p))))
+
+(defn! _parse/peek-char (p)
+  (if (parse-state-eof? p)
+    (raise (parse/error-eof)))
+  (string-get (parse-state-input p) (parse-state-pos p)))
+(defn! _parse/advance (p n)
+  (parse-state-set-pos! p (int+ (parse-state-pos p) n)))
+
+(def! parse/empty
+  (fn (p) nil))
+
+(defn! parse/satisfies (pred?)
+  (fn (p)
+    (let ((c (_parse/peek-char p)))
+      (if (pred? c)
+        (do
+          (_parse/advance p 1)
+          c)
+        (parse/error-no-match)))))
+
+(defn! parse/any-char ()
+  (parse/satisfies (fn (_) true)))
+(defn! parse/char (expect)
+  (parse/satisfies (fn (c) (= c expect))))
+(defn! parse/char-in (str)
+  (parse/satisfies (fn (c) (string-index str (fn (in-str) (= c in-str))))))
+(defn! parse/char-not-in (str)
+  (parse/satisfies (fn (c) (not (string-index str (fn (in-str) (= c in-str)))))))
+
+(defrecord! <parse-error>
+  make-parse-error
+  parse-error?
+  (tag parse-error-tag)
+  (cause parse-error-cause))
+
+(defn! parse/error-eof ()
+  (raise (make-parse-error 'eof nil)))
+
+(defn! parse/error-no-match ()
+  (raise (make-parse-error 'no-match nil)))
+
+(defn! parse/error-user (err)
+  (raise (make-parse-error 'user err)))
+
+(defn! parse/take (n)
+  (fn (p)
+    (let*
+      ((input (parse-state-input p))
+       (pos (parse-state-pos p))
+       (end-pos (int+ pos n)))
+      (if (int> end-pos (string-count input))
+        (parse/error-eof))
+      (_parse/advance p n)
+      (substring input pos end-pos))))
+
+(defn! parse/expect (str)
+  (fn (p)
+    (let*
+      ((input (parse-state-input p))
+       (pos (parse-state-pos p))
+       (n (string-count str))
+       (end-pos (int+ pos n)))
+      (if (string-range= input str pos end-pos)
+        (do (_parse/advance p n) str)
+        (parse/error-no-match)))))
+
+(defn! parse/take-while (pred?)
+  (fn (p)
+    (let*
+      ((input (parse-state-input p))
+       (input-len (string-count input))
+       (start-pos (parse-state-pos p)))
+      (let-named loop ((pos start-pos))
+        (if (and (int< pos input-len) (pred? (string-get input pos)))
+          (loop (inc pos))
+          (do
+            (parse-state-set-pos! p pos)
+            (substring input start-pos pos)))))))
+
+(defn! parse/take-while1 (pred?)
+  (let ((base (parse/take-while pred?)))
+    (fn (p)
+      (let ((result (base p)))
+        (if (string-null? result)
+          (parse/error-eof)
+          result)))))
+
+(defmacro! parse/guard (parse-state err-sym-and-fallback . body)
+  (let
+    ((init-state-sym (gensym "init-state"))
+     (err-sym (car err-sym-and-fallback))
+     (fallback-body (cdr err-sym-and-fallback)))
+    `(let ((~init-state-sym (parse-state-pos ~parse-state)))
+      (guard
+        (~err-sym
+          ((parse-error? ~err-sym)
+            (do
+              (parse-state-set-pos! ~parse-state ~init-state-sym)
+              ; Wrap with let to isolate the body
+              (let () ~@fallback-body))))
+        ~@body))))
+
+(defn! parse/one-of parsers
+  (fn (p)
+    (let-named loop ((parsers parsers))
+      (let-if-cons ((next . rest) parsers)
+        (parse/guard p (err (loop rest)) (next p))
+        (parse/error-no-match)))))
+
+(defn! parse/preceeded (before parser)
+  (fn (p)
+    (before p)
+    (parser p)))
+
+(defn! parse/terminated (parser after)
+  (fn (p)
+    (let ((result (parser p)))
+      (after p)
+      result)))
+
+(defn! parse/between (before parser after)
+  (parse/preceeded before (parse/terminated parser after)))
+
+(defn! parse/separated-pair (first sep second)
+  (fn (p)
+    (let
+      ((a (first p))
+       (_ (sep p))
+       (b (second p)))
+      (cons a b))))
+
+(defn! parse/with-value (value parser)
+  (fn (p) (parser p) value))
+
+(defn! parse/with-fallback (fallback-parser parser)
+  (fn (p)
+    (parse/guard p (err (fallback-parser p)) (parser p))))
+
+;; Wrap errors thrown in body with make-parse-error so they trigger a parse
+;; failure rather than bubbling up out of the parser.
+(defmacro! parse/wrap-errors body
+  (let ((err-sym (gensym "err")))
+    `(guard
+      (~err-sym (else (raise (parse/error-user ~err-sym))))
+      ~@body)))
+
+; TODO: This relies on `map` processing elements in order
+(defn! parse/seq parsers
+  (fn (p)
+    (map (fn (parser) (parser p)) parsers)))
+
+(defn! parse/map (f parser)
+  (fn (p) (f (parser p))))
+
+(defn! parse/map* (f . parsers)
+  ; TODO: Merge with parse/map?
+  (parse/map (fn (results) (apply f results)) (parse/seq parsers)))
+
+(defn! parse/many (parser)
+  (defn! loop (acc p)
+    (let
+      ((new-acc
+        (parse/guard p (err acc) (cons (parser p) acc))))
+      (loop new-acc p)))
+  (fn (p)
+    ; TODO: Mutable list builder
+    (reverse (loop nil p))))
+
+(defn! parse/many1 (parser)
+  (let ((base (parse/many parser)))
+    (fn (p)
+      (let-if (result (base p))
+        result
+        (parse/error-no-match)))))
+
+(defn! parse/many1 (parser)
+  (parse/template
+    ((first parser)
+     (rest (parse/many parser)))
+    (cons first rest)))
+
+(defn! parse/separated1 (sep-parser item-parser)
+  (parse/template
+    ((first item-parser)
+     (rest
+      (parse/many (parse/preceeded sep-parser item-parser))))
+    (cons first rest)))
+
+(defn! parse/separated (sep-parser item-parser)
+  (let ((base (parse/separated1 sep-parser item-parser)))
+    (fn (p)
+      (parse/guard p (err nil) (base p)))))
+
+(defn! parse/separated (sep-parser item-parser)
+  (let ((base (parse/separated1 sep-parser item-parser)))
+    (fn (p)
+      (parse/guard p (err nil) (base p)))))
+
+;; Conveniece macro which can help the parser mirror the input.
+;; - Creates let-bindings for parts in a sequence of parsers
+;; - Accepts string/char literals to avoid wrapping them in parse/char or
+;;   parse/expect
+;;
+;; Example:
+;; (parse/template
+;;   ((hour parse/int) ":" (minute parse/int) ":" (second parse/int))
+;;   (+ (* hour 3600) (* minute 60) second))
+(defmacro! parse/template (parts . body)
+  (let ((state-sym (gensym "parse-state")))
+    `(fn (~state-sym)
+      ~(let-named helper ((parts parts) (bindings nil))
+        ; The helper needs to create let-bindings to intermediate symbols, then
+        ; re-bind them to the desired names at the end to avoid shadowing names
+        ; in the let-expressions
+        (let-if-cons ((next . rest) parts)
+          (cond
+            ((string? next)
+              `(do
+                ((parse/expect ~next) ~state-sym)
+                ~(helper rest bindings)))
+            ((char? next)
+              `(do
+                ((parse/char ~next) ~state-sym)
+                ~(helper rest bindings)))
+            ((and (list? next) (= 2 (count next)) (symbol? (car next)))
+              (let*
+                ((bind-sym (car next))
+                 (tmp-sym (gensym bind-sym))
+                 (bind-expr (cadr next)))
+                `(let ((~tmp-sym (~bind-expr ~state-sym)))
+                  ~(helper rest (cons (list bind-sym tmp-sym) bindings)))))
+            (else (error "invalid parse template")))
+          ; reverse isn't strictly necessary, but it keeps bindings in the
+          ; original order for consistency
+          `(let ~(reverse bindings) ~@body))))))
+
+(defn! char-hex-digit? (c)
+  (or
+    (char-digit? c)
+    (and (char<= #\a c) (char<= c #\f))
+    (and (char<= #\A c) (char<= c #\F))))
+
+(def! parse/space (parse/take-while char-blank?))
+(def! parse/space1 (parse/take-while1 char-blank?))
+
+(def! parse/int
+  (parse/map string->int (parse/take-while1 char-digit?)))
+
+(defn! parse/run (parser input)
+  (parser (make-parse-state input 0)))
+
+(defn! parse/run-port-lines (parser port)
+  (r/into-list
+    (r/map (fn (line) (parse/run parser line)))
+    (r/input-port-lines port)))
