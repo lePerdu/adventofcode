@@ -1,0 +1,58 @@
+(defn! timestamp-of-minutes (m) m)
+(defn! timestamp-minutes (ts) ts)
+(defn! timestamp-minutes-part (ts) (rem (timestamp-minutes ts) 60))
+(defn! timestamp< (a b) (int< a b))
+
+(defn! month-days (m)
+  (case m
+    ((1 3 5 7 8 10 12) 31)
+    ((4 6 9 11) 30)
+    ((2) 28)))
+
+(defn! month->days-in-year (m)
+  (|> (range 1 m) (map month-days) sum))
+
+(defrecord! <guard-record>
+  make-guard-record
+  guard-record?
+  (time record-time)
+  (event record-event))
+
+(def! parse-timestamp
+  (parse/template
+    ((year parse/int)
+     "-"
+     (month parse/int)
+     "-"
+     (day parse/int)
+     " "
+     (hour parse/int)
+     ":"
+     (minute parse/int))
+    (if (not (= year *base-year*))
+      (error (string-concat "expected year to be " (->string *base-year*))))
+    (timestamp-of-minutes 
+      (int+
+        (int*
+          60
+          (int+
+            (int*
+              24
+              (+ (dec day) (month->days-in-year month)))
+            hour))))))
+
+(def! parse-event
+  (parse/one-of
+    (parse/template
+      ("Guard #" (guard-id parse/int) " begins shift")
+      guard-id)
+    (parse/with-value (parse/expect "falls asleep") 'sleep)
+    (parse/with-value (parse/expect "wakes up") 'wake)))
+
+(def! parse-line
+  (parse/let
+    ("[" (ts parse-timestamp) "] " (event parse-event))
+    (make-guard-record ts event)))
+
+(defn! parse-input (port)
+  (parse/run (parse/map-lines parse-line) port))
