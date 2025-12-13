@@ -1,0 +1,20 @@
+(include "../parse.wh")
+
+(def! make-point cons)
+(def! point-x car)
+(def! point-y cdr)
+
+(def! parse-point
+  (parse/template
+    ((x parse/int)
+     ", "
+     (y parse/int))
+    (make-point x y)))
+
+(defn! read-input (port)
+  (r/into-array 10
+    (r/map (fn (line) (parse/run parse-point line)))
+    (r/input-port-lines port)))
+
+(def! example (call-with-input-file "example.txt" read-input))
+(def! input (call-with-input-file "input.txt" read-input))
