@@ -42,12 +42,22 @@ get :: #force_inline proc(grid: Grid($T), row: int, col: int) -> T {
 	return grid.data[row * grid.cols + col]
 }
 
+get_ptr :: #force_inline proc(grid: Grid($T), row: int, col: int) -> ^T {
+	assert(row < grid.rows)
+	assert(col < grid.cols)
+	return &grid.data[row * grid.cols + col]
+}
+
 get_or_default :: proc(grid: Grid($T), row: int, col: int, default: T) -> T {
 	if 0 <= row && row < grid.rows && 0 <= col && col < grid.cols {
 		return get(grid, row, col)
 	} else {
 		return default
 	}
+}
+
+get_row :: #force_inline proc(grid: Grid($T), row: int) -> []T {
+	return grid.data[row * grid.cols:(row + 1) * grid.cols]
 }
 
 set :: #force_inline proc(grid: Grid($T), row: int, col: int, val: T) {
@@ -58,6 +68,24 @@ set :: #force_inline proc(grid: Grid($T), row: int, col: int, val: T) {
 
 clone :: proc(grid: Grid($T), allocator := context.allocator) -> Grid(T) {
 	return {data = slice.clone(grid.data, allocator), rows = grid.rows, cols = grid.cols}
+}
+
+clone_transposed :: proc(
+	grid: Grid($T),
+	allocator := context.allocator,
+) -> (
+	transposed: Grid(T),
+	err: mem.Allocator_Error,
+) #optional_allocator_error {
+	transposed, err = make(T, grid.cols, grid.rows, allocator)
+	if err != nil do return
+
+	for orig_row in 0 ..< grid.rows {
+		for orig_col in 0 ..< grid.cols {
+			set(transposed, orig_col, orig_row, get(grid, orig_row, orig_col))
+		}
+	}
+	return
 }
 
 Builder :: struct($T: typeid) {
@@ -80,14 +108,27 @@ GridBuilderError :: union #shared_nil {
 	GridAppendError,
 }
 
-append :: proc(builder: ^Builder($T), row: []T) -> GridBuilderError {
+@(require_results)
+append_row_slice :: proc(builder: ^Builder($T), row: []T) -> GridBuilderError {
 	if builder.cols == 0 {
 		builder.cols = len(row)
 	} else if len(row) != builder.cols {
 		return GridAppendError.Invalid_Row_Len
 	}
 
-	return append(&builder.data, ..row)
+	_, err := builtin.append(&builder.data, ..row)
+	return err
+}
+
+/// Specialized version for appending a string as a row
+@(require_results)
+append_row_string :: proc(builder: ^Builder(u8), row: string) -> GridBuilderError {
+	return append_row_slice(builder, transmute([]u8)row)
+}
+
+append :: proc {
+	append_row_slice,
+	append_row_string,
 }
 
 add_row :: proc(builder: ^Builder($T), cols: int) -> (new_row: []T, err: GridBuilderError) {
