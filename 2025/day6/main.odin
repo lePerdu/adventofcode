@@ -183,22 +183,15 @@ part2_parse_input :: proc(text: string) -> (input: Part2Worksheet, ok: bool) {
 	operands_text := text[:operators_index]
 	operators_text := text[operators_index:]
 
-	text_grid_builder: grid.Builder(u8)
-	grid.builder_init(&text_grid_builder)
-
-	line_iter := operands_text
-	for line in strings.split_lines_iterator(&line_iter) {
-		err := grid.append(&text_grid_builder, line)
-		if err != nil {
-			fmt.fprintfln(os.stderr, "invalid grid append: %v")
-			return {}, false
-		}
-	}
-
 	// 123 328  51 64
 	//  45 64  387 23
 	//   6 98  215 314
-	orig_operands_text := grid.build(text_grid_builder)
+	orig_operands_text: grid.Grid(u8)
+	orig_operands_text, ok = grid.parse_ascii_grid(operands_text)
+	if !ok {
+		fmt.fprintln(os.stderr, "operands not in a proper grid")
+		return
+	}
 
 	// 1
 	// 24

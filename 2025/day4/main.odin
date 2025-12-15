@@ -21,41 +21,31 @@ main :: proc() {
 	fmt.printfln("Part 2: %d", part2(input))
 }
 
-Cell :: enum {
-	Empty = 0,
-	Paper,
+Cell :: enum u8 {
+	Empty = '.',
+	Paper = '@',
 }
 
-Grid :: grid.Grid(Cell)
+Input :: grid.Grid(Cell)
 
-parse_input :: proc(input: string) -> (Grid, bool) {
-	builder: grid.Builder(Cell)
-	grid.builder_init(&builder)
-
-	iter := input
-	for line in strings.split_lines_iterator(&iter) {
-		row, err := grid.add_row(&builder, len(line))
-		if err != nil {
-			fmt.fprintfln(os.stderr, "failed to add row: %v", err)
-			return {}, false
-		}
-		for col in 0 ..< len(line) {
-			switch line[col] {
-			case '.':
-				row[col] = .Empty
-			case '@':
-				row[col] = .Paper
+parse_input :: proc(input: string) -> (Input, bool) {
+	ascii_grid, err := grid.parse_ascii_grid(input)
+	for row in 0 ..< ascii_grid.rows {
+		for col in 0 ..< ascii_grid.cols {
+			c := grid.get(ascii_grid, row, col)
+			switch c {
+			case u8(Cell.Empty), u8(Cell.Paper):
+			// No-op
 			case:
-				fmt.fprintfln(os.stderr, "invalid cell: %c", line[col])
+				fmt.fprintfln(os.stderr, "invalid character: %c", c)
 				return {}, false
 			}
 		}
 	}
-
-	return grid.build(builder), true
+	return transmute(grid.Grid(Cell))ascii_grid, true
 }
 
-part1 :: proc(input: Grid) -> uint {
+part1 :: proc(input: Input) -> uint {
 	total: uint = 0
 	for row in 0 ..< input.rows {
 		for col in 0 ..< input.cols {
@@ -67,7 +57,7 @@ part1 :: proc(input: Grid) -> uint {
 	return total
 }
 
-part2 :: proc(input: Grid) -> uint {
+part2 :: proc(input: Input) -> uint {
 	total_removed: uint = 0
 
 	state := grid.clone(input)
@@ -92,7 +82,7 @@ part2 :: proc(input: Grid) -> uint {
 	return total_removed
 }
 
-count_surrounding :: proc(g: Grid, row: int, col: int) -> uint {
+count_surrounding :: proc(g: Input, row: int, col: int) -> uint {
 	n: uint = 0
 	if grid.get_or_default(g, row - 1, col - 1, Cell.Empty) == .Paper do n += 1
 	if grid.get_or_default(g, row - 1, col, Cell.Empty) == .Paper do n += 1
