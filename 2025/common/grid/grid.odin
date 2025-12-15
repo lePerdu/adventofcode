@@ -5,9 +5,10 @@ import "core:mem"
 import "core:slice"
 
 Grid :: struct($T: typeid) {
-	data: []T,
-	rows: int,
-	cols: int,
+	data:   [^]T,
+	rows:   int,
+	cols:   int,
+	stride: int,
 }
 
 make :: proc(
@@ -19,12 +20,13 @@ make :: proc(
 	grid: Grid(T),
 	err: mem.Allocator_Error,
 ) #optional_allocator_error {
-	grid.data, err = builtin.make([]T, rows * cols, allocator)
+	grid.data, err = builtin.make([^]T, rows * cols, allocator)
 	if err != nil {
 		return
 	}
 	grid.rows = rows
 	grid.cols = cols
+	grid.stride = cols
 	return
 }
 
@@ -37,15 +39,15 @@ fill :: proc(grid: Grid($T), val: T) {
 }
 
 get :: #force_inline proc(grid: Grid($T), row: int, col: int) -> T {
-	assert(row < grid.rows)
-	assert(col < grid.cols)
-	return grid.data[row * grid.cols + col]
+	return get_ptr(grid, row, col)^
 }
 
 get_ptr :: #force_inline proc(grid: Grid($T), row: int, col: int) -> ^T {
+	assert(row >= 0)
+	assert(col >= 0)
 	assert(row < grid.rows)
 	assert(col < grid.cols)
-	return &grid.data[row * grid.cols + col]
+	return &grid.data[row * grid.stride + col]
 }
 
 get_or_default :: proc(grid: Grid($T), row: int, col: int, default: T) -> T {
@@ -57,17 +59,55 @@ get_or_default :: proc(grid: Grid($T), row: int, col: int, default: T) -> T {
 }
 
 get_row :: #force_inline proc(grid: Grid($T), row: int) -> []T {
-	return grid.data[row * grid.cols:(row + 1) * grid.cols]
+	assert(row >= 0)
+	assert(row < grid.rows)
+	return grid.data[row * grid.stride:][:grid.cols]
 }
 
 set :: #force_inline proc(grid: Grid($T), row: int, col: int, val: T) {
-	assert(row < grid.rows)
-	assert(col < grid.cols)
-	grid.data[row * grid.cols + col] = val
+	get_ptr(grid, row, col)^ = val
 }
 
-clone :: proc(grid: Grid($T), allocator := context.allocator) -> Grid(T) {
-	return {data = slice.clone(grid.data, allocator), rows = grid.rows, cols = grid.cols}
+copy :: proc(dst, src: Grid($T)) {
+	assert(dst.rows == src.rows)
+	assert(dst.cols == src.cols)
+	if dst.stride == dst.rows && src.stride == dst.rows {
+		data_len := dst.rows * dst.cols
+		builtin.copy(dst.data[:data_len], src.data[:data_len])
+	} else {
+		for row in 0 ..< dst.rows {
+			builtin.copy(get_row(dst, row), get_row(src, row))
+		}
+	}
+}
+
+sub :: proc(grid: Grid($T), row_start, col_start, row_end, col_end: int) -> Grid(T) {
+	assert(row_start >= 0)
+	assert(col_start >= 0)
+	assert(row_start <= row_end)
+	assert(col_start <= col_end)
+	assert(row_end <= grid.rows)
+	assert(col_end <= grid.cols)
+
+	rows := row_end - row_start
+	cols := col_end - col_start
+	flat_start := row_start * grid.stride + col_start
+	return {data = grid.data[flat_start:], rows = rows, cols = cols, stride = grid.stride}
+}
+
+clone :: proc(
+	grid: Grid($T),
+	allocator := context.allocator,
+) -> (
+	cloned: Grid(T),
+	err: mem.Allocator_Error,
+) #optional_allocator_error {
+	cloned, err = make(T, grid.rows, grid.cols)
+	if err != nil {
+		return
+	}
+	copy(cloned, grid)
+	return
 }
 
 clone_transposed :: proc(
@@ -152,5 +192,10 @@ build :: proc(builder: Builder($T)) -> Grid(T) {
 	}
 	assert(builder.cols > 0)
 	assert(len(builder.data) % builder.cols == 0)
-	return {data = builder.data[:], rows = len(builder.data) / builder.cols, cols = builder.cols}
+	return {
+		data = raw_data(builder.data),
+		rows = len(builder.data) / builder.cols,
+		cols = builder.cols,
+		stride = builder.cols,
+	}
 }
