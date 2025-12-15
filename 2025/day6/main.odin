@@ -1,12 +1,9 @@
 package day6
 
-import "core:crypto/x25519"
 import "core:fmt"
 import "core:os"
-import "core:reflect"
 import "core:strconv"
 import "core:strings"
-import "core:text/i18n"
 
 import "../common/grid"
 
