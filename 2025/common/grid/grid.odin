@@ -38,6 +38,10 @@ fill :: proc(grid: Grid($T), val: T) {
 	}
 }
 
+in_bounds :: proc(grid: Grid($T), row: int, col: int) -> bool {
+	return 0 <= row && row < grid.rows && 0 <= col && col < grid.cols
+}
+
 get :: #force_inline proc(grid: Grid($T), row: int, col: int) -> T {
 	return get_ptr(grid, row, col)^
 }
