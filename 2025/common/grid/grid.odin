@@ -1,6 +1,8 @@
 package grid
 
 import "base:builtin"
+import "base:intrinsics"
+import "core:fmt"
 import "core:mem"
 import "core:slice"
 
@@ -130,6 +132,38 @@ clone_transposed :: proc(
 		}
 	}
 	return
+}
+
+row_swap :: proc(grid: Grid($T), dst_row, src_row: int) {
+	slice.swap_with_slice(get_row(grid, dst_row), get_row(grid, src_row))
+}
+
+row_scale :: proc(grid: Grid($T), row: int, scalar: T) where intrinsics.type_is_numeric(T) {
+	for v in get_row(grid, row) {
+		v *= scalar
+	}
+}
+
+row_add_scale :: proc(
+	grid: Grid($T),
+	dst_row, src_row: int,
+	scalar: T,
+) where intrinsics.type_is_numeric(T) {
+	row_scale_add_scale(grid, dst_row, 1, src_row, scalar)
+}
+
+row_scale_add_scale :: proc(
+	grid: Grid($T),
+	dst_row: int,
+	dst_scalar: T,
+	src_row: int,
+	src_scalar: T,
+) where intrinsics.type_is_numeric(T) {
+	dst_row := get_row(grid, dst_row)
+	src_row := get_row(grid, src_row)
+	for col in 0 ..< grid.cols {
+		dst_row[col] = dst_row[col] * dst_scalar + src_row[col] * src_scalar
+	}
 }
 
 Builder :: struct($T: typeid) {
