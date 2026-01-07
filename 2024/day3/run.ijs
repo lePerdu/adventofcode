@@ -4,7 +4,7 @@ input =: freads 'input.txt'
 
 NB. Part 1
 mul_matches =: 'mul\((\d+),(\d+)\)' rxmatches input
-mul_values =: ". > input {L:0~ <@(+i.)/"1 }."2 mul_matches
+mul_values =: ". > input rxfrom~ }."2 mul_matches
 echo +/ */"1 mul_values
 
 NB. Part 2
