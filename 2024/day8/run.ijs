@@ -10,31 +10,32 @@ antenna_type_indices =: freq_index antenna_types
 antennas_of_type =: antenna_coords #~ antenna_types&=
 antennas_by_type =: <@antennas_of_type "0 frequencies
 
-NB. Generate all combinations of x items of i.y
-NB. From the J dictionary entry for "!"
-NB. Doesn't seem to work... it just gives a "valence error"
-NB. seed =: [: i.@(,&0)&.> <:@- {. 1:
-NB. cf =: i.@# ,.&.> ,&.>/\.@:(>:&.>)
-NB. comb =: [: ; [ cf@[&0 seed
+cartesian_prod =: > @ { @ (,&<)
+NB. Flattened list of pairs of i.y
+cartesian_pairs =: [: ,/ cartesian_prod~
+NB. Excluding the "diagonal" where a = b
+non_diag_indices =: [: , [: -. [: = i.
+ordered_pairs =: non_diag_indices@# # cartesian_pairs
 
-NB. From the Wiki (actually works)
-comb =: {{
- d =. y - x
- if. d < 0 do. (0,x) $ 0 return. end.
- k =. i. >: d
- z =. (d $ < i.0 0) , < i.1 0
- for. i.x do. z =. k ,.&.> ,&.>/\. >:&.> z end.
- ; z
+NB. All ordered pairs of distinct items of y, for rank N>0 items
+NB. Going through indices seems simpler than boxing/unboxing
+ordered_pairs_1 =: {{
+ NB. Special case for 0, 1 since I couldn't figure out how to make
+ NB. the cartesian production functions generate the right shape
+ NB. automatically: they all "degenerate" into flat arrays instead of
+ NB. keeping the nested shape
+ if. 1 < #y
+  do. (ordered_pairs@i.@# { ]) y
+  else. (0 2 , }.$y) $ 0
+ end.
 }}
 
-pairwise =: {~ 2 comb #
-
 right_annode =: -~ +:
-annodes_between =: right_annode ,: right_annode~
 
-all_type_annodes =: [: ,/ [: annodes_between/"2 pairwise
+all_type_annodes =: [: right_annode/"2 ordered_pairs_1
 
-all_annodes =: ~. > ,each/ all_type_annodes each antennas_by_type
+collect_unique =: 1 : '[: ~. [: > [: ,each/ u each'
+all_annodes =: all_type_annodes collect_unique antennas_by_type
 
 in_bounds =: {{ *./ (0 0 <: y) *. (y < $ input) }}
 
@@ -55,12 +56,11 @@ ext_right_annodes =: 4 : 0
  n =. <./ n_towards_0 + n_towards_edge + n_inf
  |: y + v *"0 1 i. >: n
 )
-ext_annodes =: ext_right_annodes , ext_right_annodes~
 
-all_type_annodes =: [: ,/ [: ext_annodes/"2 pairwise
+all_type_annodes_2 =: [: ,/ [: ext_right_annodes/"2 ordered_pairs_1
 
-all_annodes =: ~. > ,each/ all_type_annodes each antennas_by_type
+all_annodes_2 =: all_type_annodes_2 collect_unique antennas_by_type
 
 NB. TODO: Would it be better to work with coordinate lists transposed?
 NB. That was, this could drop the "1
-echo +/ in_bounds"1 all_annodes
+echo +/ in_bounds"1 all_annodes_2
