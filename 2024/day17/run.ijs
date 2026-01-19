@@ -73,6 +73,14 @@ echo join_output OUT get init_state run program
 
 NB. Part 2
 
+NB. Build a J expression that represents the program
+NB. This assumes the program is of the form:
+NB.  ...
+NB.  out X
+NB.  adv 3
+NB.  jnz 0
+NB. Where X only depends on A and doesn't modify A
+
 rshift =: {{ '(', (":x) , ') RSHIFT (', (":y), ')' }}
 xor =: {{ '(', (":x) , ') XOR (', (":y), ')' }}
 mod8 =: {{ 'MOD8 (', (":y), ')' }}
@@ -86,6 +94,10 @@ assert 2 = #output_exprs
 assert 'loop 0' -: >{:output_exprs
 output_expr =: >{.output_exprs
 
+NB. TODO: Take this from the program instead of assuming it's always 3
+shift_bits =: 3
+assert a_expr = '(y) RSHIFT (', (":shift_bits), ')'
+
 a_update =: 3 : a_expr
 output =: 3 : output_expr
 
@@ -98,30 +110,27 @@ a_sequence =: {{
  seq
 }}
 
-min_a =: 45 (33 b.) 1
-max_a =: 48 (33 b.) 1
-
 run_with_a =: output@a_sequence
-nth_a =: {{ a_update^:x y }}
+run_nth =: {{ output a_update^:x y }}
 
-bit_chunk =: i. 1 LSHIFT 11
-chunk_outputs =: output bit_chunk
-chunks_output_n =: {{ I. y = chunk_outputs }}
-shifted_chunks_for_index =: {{ (3*y) LSHIFT~ chunks_output_n y{program }}
+NB. Low 10 bits affect the first output
+init_bits =: I. ({.program) = output i. 1 LSHIFT 8 + shift_bits
+NB. Upper bits that affect the xth output
+upper_bits =: {{ (7 + shift_bits * y) LSHIFT~ i.8 }}
 
-check_a =: {{ program -: run_with_a y }}
-check_a_range =: {{
- while. x < y do.
-  if. check_a x do. a return. end.
-  x =. >:x
+extend_chunk =: {{
+ target =. x{program
+ NB. TODO: Use array operations
+ res =. 0$0
+ for_upper. upper_bits x do.
+  for_lower. y do.
+   guess =. upper OR lower
+   if. target = x run_nth guess do.
+    res =. res, guess
+   end.
+  end.
  end.
- _1
+ res
 }}
 
-n_threads =: <: {. 8 T. ''
-NB. {{0 T.0}}^:] n_threads
-
-check_a_range_par =: {{
- per_thread =. >. y%x
- (per_thread * i.x) (check_a_range t. 0)"0 (per_thread * >: i.x)
-}}
+echo {. init_bits [ F.. extend_chunk }. i. #program
